@@ -1,8 +1,53 @@
+# Environment
 .env
+.env.*
+!.env.example
+
+# Virtual environments
 .venv/
+venv/
+env/
+ENV/
+
+# Python bytecode
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+wheels/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.pytype/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data & databases
 *.db
+*.sqlite3
 *.jsonl
+
+# Logs
+*.log
+logs/
+
+# OS
 .DS_Store
+Thumbs.db

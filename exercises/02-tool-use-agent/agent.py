@@ -252,7 +252,12 @@ def run_research_agent(company: str) -> dict:
                 "{}"
             )
             try:
-                report = json.loads(raw)
+                # Strip markdown code fences if present
+                stripped = raw.strip()
+                if stripped.startswith("```"):
+                    stripped = stripped.split("\n", 1)[-1]
+                    stripped = stripped.rsplit("```", 1)[0].strip()
+                report = json.loads(stripped)
                 console.print(Panel(JSON(json.dumps(report, indent=2)), title="[green]Research Report[/green]"))
                 return report
             except json.JSONDecodeError:

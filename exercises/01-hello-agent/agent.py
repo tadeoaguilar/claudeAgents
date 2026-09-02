@@ -18,7 +18,14 @@ from rich.text import Text
 
 load_dotenv()
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+_extra_headers = {}
+if ws_id := os.getenv("ANTHROPIC_WORKSPACE_ID"):
+    _extra_headers["anthropic-workspace-id"] = ws_id
+
+client = anthropic.Anthropic(
+    api_key=os.getenv("ANTHROPIC_API_KEY"),
+    default_headers=_extra_headers,
+)
 console = Console()
 
 # ──────────────────────────────────────────────
