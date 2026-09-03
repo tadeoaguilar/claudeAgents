@@ -1,11 +1,12 @@
 import json
+import os
 import time
 import uuid
-from dataclasses import dataclass,field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-LOG_FILE=Path(__file__).parent / "pipeline_runs.jsonl"
+LOG_FILE = Path(os.getenv("PIPELINE_LOG_FILE", str(Path(__file__).parent / "pipeline_runs.jsonl")))
 
 
 # ---- To Observe Span

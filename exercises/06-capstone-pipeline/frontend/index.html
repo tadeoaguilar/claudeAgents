@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Market Research Intelligence</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <span class="logo">&#9642; Market Research Intelligence</span>
+    </div>
+  </header>
+
+  <main class="page-index">
+    <!-- Submit panel -->
+    <section class="card submit-card">
+      <h2>New Research Run</h2>
+      <p class="subtitle">Enter a company, topic, or investment thesis to analyze.</p>
+      <form id="run-form">
+        <div class="input-row">
+          <input
+            type="text"
+            id="query-input"
+            placeholder="e.g. Tesla electric vehicles Q4 2024"
+            autocomplete="off"
+            required
+          />
+          <button type="submit" id="submit-btn">Run Pipeline</button>
+        </div>
+        <div id="form-error" class="form-error hidden"></div>
+      </form>
+    </section>
+
+    <!-- History panel -->
+    <section class="card history-card">
+      <div class="history-header">
+        <h2>Run History</h2>
+        <span id="refresh-indicator" class="refresh-indicator"></span>
+      </div>
+      <div id="history-body">
+        <div class="loading-row">Loading runs...</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/assets/app.js"></script>
+  <script>
+    IndexPage.init();
+  </script>
+</body>
+</html>

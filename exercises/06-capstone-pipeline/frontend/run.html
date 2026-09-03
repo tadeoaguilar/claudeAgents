@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pipeline Run — Market Research Intelligence</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <a href="/" class="logo">&#9642; Market Research Intelligence</a>
+    </div>
+  </header>
+
+  <main class="page-run">
+
+    <!-- Run header -->
+    <section class="card run-header-card">
+      <div class="run-meta">
+        <div>
+          <span class="label">Run ID</span>
+          <span id="run-id-display" class="mono">—</span>
+        </div>
+        <div>
+          <span class="label">Query</span>
+          <span id="query-display">—</span>
+        </div>
+        <div>
+          <span class="label">Status</span>
+          <span id="status-badge" class="badge badge-queued">queued</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Progress panel -->
+    <section class="card" id="progress-panel">
+      <h3>Pipeline Progress</h3>
+      <div class="stage-list">
+        <div class="stage" id="stage-agents">
+          <span class="stage-icon" id="icon-agents">&#9675;</span>
+          <span class="stage-label">Stage 1 &mdash; Intelligence Gathering</span>
+          <div class="agent-list" id="agent-list">
+            <span class="agent-item" id="agent-news_agent">News Agent</span>
+            <span class="agent-item" id="agent-sentiment_agent">Sentiment Agent</span>
+            <span class="agent-item" id="agent-financials_agent">Financials Agent</span>
+          </div>
+        </div>
+        <div class="stage" id="stage-skills">
+          <span class="stage-icon" id="icon-skills">&#9675;</span>
+          <span class="stage-label">Stage 2 &mdash; Synthesis &amp; Risk Analysis</span>
+          <div class="agent-list" id="skill-list">
+            <span class="agent-item" id="skill-generate_executive_summary">Executive Summary</span>
+            <span class="agent-item" id="skill-classify_risk">Risk Classification</span>
+          </div>
+        </div>
+        <div class="stage" id="stage-hitl">
+          <span class="stage-icon" id="icon-hitl">&#9675;</span>
+          <span class="stage-label">Stage 3 &mdash; HITL Gate</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- HITL approval panel (hidden by default) -->
+    <section class="card hitl-card hidden" id="hitl-panel">
+      <div class="hitl-header">
+        <span class="hitl-icon">&#9888;</span>
+        <h3>Human Approval Required</h3>
+      </div>
+      <div class="hitl-details">
+        <div class="hitl-row">
+          <span class="label">Headline</span>
+          <span id="hitl-headline">—</span>
+        </div>
+        <div class="hitl-row">
+          <span class="label">Risk Level</span>
+          <span id="hitl-risk-level">—</span>
+        </div>
+        <div class="hitl-row">
+          <span class="label">Risk Score</span>
+          <span id="hitl-risk-score">—</span>
+        </div>
+        <div class="hitl-row">
+          <span class="label">Reason</span>
+          <span id="hitl-reason">—</span>
+        </div>
+      </div>
+      <div class="hitl-actions">
+        <button class="btn-approve" id="btn-approve">Approve Report Delivery</button>
+        <button class="btn-reject" id="btn-reject">Reject Report</button>
+      </div>
+      <div id="hitl-pending" class="hitl-pending hidden">Processing decision...</div>
+    </section>
+
+    <!-- Report panel (hidden until delivered) -->
+    <section class="card hidden" id="report-panel">
+      <div class="report-toolbar">
+        <h3>Intelligence Report</h3>
+        <button class="btn-export" id="btn-export">Export .md</button>
+      </div>
+      <div id="report-content" class="report-content"></div>
+      <div class="report-footer" id="report-footer"></div>
+    </section>
+
+    <!-- Error panel (hidden unless error) -->
+    <section class="card error-card hidden" id="error-panel">
+      <h3>Pipeline Error</h3>
+      <p id="error-message">An unexpected error occurred.</p>
+      <a href="/" class="btn-retry">&#8592; New Run</a>
+    </section>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="/assets/app.js"></script>
+  <script>
+    RunPage.init();
+  </script>
+</body>
+</html>

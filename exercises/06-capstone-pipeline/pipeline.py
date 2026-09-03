@@ -205,9 +205,10 @@ def _assemble_report(query: str, run_id: str, summary: dict, risk: dict) -> str:
 def main() -> None:
     if len(sys.argv) < 2:
         print('Usage: python pipeline.py "<company or topic>"')
-        sys.exit(1)
-
-    query  =  " ".join(sys.argv[1:])
+        q = "Tesla electric vehicles Q4 2024"
+    else:
+        q= " ".join(sys.argv[1:])
+    query  = q
     run_id = uuid.uuid4().hex[:12]
 
     result = Orchestrator(run_id=run_id).run_pipeline(query)
