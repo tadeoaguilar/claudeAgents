@@ -207,7 +207,7 @@ def main() -> None:
         print('Usage: python pipeline.py "<company or topic>"')
         sys.exit(1)
 
-    query  = " ".join(sys.argv[1:])
+    query  =  " ".join(sys.argv[1:])
     run_id = uuid.uuid4().hex[:12]
 
     result = Orchestrator(run_id=run_id).run_pipeline(query)
