@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -5,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from state import registry
 
 PIPELINE_DIR = str(Path(__file__).parent.parent.parent)
+DATA_DIR = Path(os.getenv("DATA_DIR", PIPELINE_DIR))
 router = APIRouter()
 
 
@@ -15,7 +17,7 @@ def get_report(run_id: str):
         return {"run_id": run_id, "report_markdown": record.report}
 
     # Fall back to disk for historical runs
-    report_path = Path(PIPELINE_DIR) / f"report_{run_id}.md"
+    report_path = DATA_DIR / f"report_{run_id}.md"
     if report_path.exists():
         return {"run_id": run_id, "report_markdown": report_path.read_text()}
 

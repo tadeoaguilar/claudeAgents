@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import uuid
 from pathlib import Path
 
@@ -10,7 +11,8 @@ from state import registry
 from runner import launch_pipeline
 
 PIPELINE_DIR = str(Path(__file__).parent.parent.parent)
-LOG_FILE = Path(PIPELINE_DIR) / "pipeline_runs.jsonl"
+DATA_DIR = Path(os.getenv("DATA_DIR", PIPELINE_DIR))
+LOG_FILE = DATA_DIR / "pipeline_runs.jsonl"
 
 router = APIRouter()
 

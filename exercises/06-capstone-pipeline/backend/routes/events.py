@@ -37,6 +37,10 @@ async def stream_events(run_id: str, request: Request):
                 }
             last_index += len(new_events)
 
+            # Heartbeat keeps Azure Container Apps ingress idle timer from firing
+            if not new_events:
+                yield {"event": "heartbeat", "data": "{}"}
+
             if run.status in TERMINAL_STATUSES and last_index >= len(run.events):
                 yield {
                     "event": "terminal",

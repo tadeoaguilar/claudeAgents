@@ -51,3 +51,6 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Deployment scripts that may contain secrets
+azure_infra.sh

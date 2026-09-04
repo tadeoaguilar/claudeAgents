@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 import time
 import uuid
@@ -8,6 +9,7 @@ from pathlib import Path
 from state import registry
 
 PIPELINE_DIR = str(Path(__file__).parent.parent)
+DATA_DIR = Path(os.getenv("DATA_DIR", PIPELINE_DIR))
 _executor = ThreadPoolExecutor(max_workers=4)
 
 
@@ -102,7 +104,7 @@ def _run_pipeline_sync(run_id: str, query: str) -> None:
         )
 
         # Save report file alongside pipeline files
-        report_path = Path(PIPELINE_DIR) / f"report_{run_id}.md"
+        report_path = DATA_DIR / f"report_{run_id}.md"
         report_path.write_text(report_text)
 
         registry.append_event(run_id, "pipeline_complete", {

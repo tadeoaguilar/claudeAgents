@@ -653,3 +653,114 @@ node -e "new Function(require('fs').readFileSync('frontend/assets/app.js', 'utf8
 - `GET /api/v1/runs/{id}` → showed `status: "running"` with `event_count` incrementing ✓
 - `GET /` → HTTP 200, `index.html` served ✓
 - `GET /run.html` → HTTP 200, `run.html` served ✓
+
+---
+
+## Azure Deployment
+
+### Infrastructure Overview
+
+The application is deployed to **Azure Container Apps** — the only managed Azure service whose HTTP ingress timeout can be configured high enough to support the 1-hour HITL gate. (Azure App Service has a hard 230-second ARR ceiling that cannot be raised.)
+
+```
+Azure Resource Group: rg-mri-pipeline-prod
+│
+├── Azure Container Registry (Basic)   acrmripipelineprod.azurecr.io
+│   └── image: mri-pipeline:{git-sha}
+│
+├── Azure Key Vault                    kv-mri-pipeline-prod
+│   └── secret: anthropic-api-key
+│
+├── Azure Storage Account              stmripipelineprod
+│   └── File Share: pipeline-data      ← mounted at /data inside container
+│       ├── pipeline_runs.jsonl
+│       └── report_*.md
+│
+├── User-Assigned Managed Identity     id-mri-pipeline-prod
+│   ├── AcrPull on ACR                 (image pull without stored credentials)
+│   └── Key Vault Secrets User on KV  (secret read without stored credentials)
+│
+├── Container Apps Environment         cae-mri-pipeline-prod
+│
+└── Container App                      ca-mri-pipeline-prod
+    ├── minReplicas: 1  maxReplicas: 1  ← CRITICAL — see constraints below
+    ├── workers: 1                      ← CRITICAL — single RunRegistry
+    ├── ingress: HTTP/1.1, external     ← SSE-compatible transport
+    ├── volume: /data → File Share      ← persistent JSONL + reports
+    └── env:
+        ANTHROPIC_API_KEY  ← secretRef (never plaintext)
+        DATA_DIR=/data
+        PIPELINE_LOG_FILE=/data/pipeline_runs.jsonl
+```
+
+### Deployment Constraints
+
+| Constraint | Setting | Consequence if violated |
+|---|---|---|
+| `minReplicas: 1` | Must be 1 | Scale-to-zero wipes in-memory RunRegistry; active runs are lost |
+| `maxReplicas: 1` | Must be 1 | Two replicas = two RunRegistries; approve on replica A cannot unblock thread on replica B |
+| `--workers 1` | Set in Dockerfile CMD | Multiple uvicorn workers = separate Python processes = separate RunRegistries |
+| SSE heartbeat | Every 500 ms idle | Without heartbeat, Azure ingress idle timer drops SSE connections; browser reconnects but operators lose context during HITL |
+
+### Files Added / Modified for Azure
+
+| File | Purpose |
+|---|---|
+| `Dockerfile` | Container image — Python 3.12-slim, two-layer caching, `--workers 1` CMD |
+| `.dockerignore` | Excludes `.env`, `__pycache__`, runtime JSONL/report files, `infra/` |
+| `infra/main.bicep` | All Azure resources in dependency order (ACR → KV → Storage → Identity → Container Apps Env → Container App) |
+| `infra/main.bicepparam` | Non-secret parameter values; `anthropicApiKey` passed only at deploy time |
+| `.gitlab-ci.yml` | Two-stage CI/CD: build+push Docker image, deploy new Container App revision |
+| `backend/runner.py` | Added `import os` + `DATA_DIR = Path(os.getenv("DATA_DIR", PIPELINE_DIR))` |
+| `backend/routes/runs.py` | `LOG_FILE` now derived from `DATA_DIR` |
+| `backend/routes/reports.py` | Report file lookup now uses `DATA_DIR` |
+| `backend/routes/events.py` | SSE heartbeat added to prevent Azure ingress idle timeout |
+
+### One-Time Provisioning
+
+```bash
+# 1. Create resource group
+az group create --name rg-mri-pipeline-prod --location eastus2
+
+# 2. Deploy all resources via Bicep (pass the API key only here, never store it)
+az deployment group create \
+  --resource-group rg-mri-pipeline-prod \
+  --template-file infra/main.bicep \
+  --parameters infra/main.bicepparam \
+  --parameters anthropicApiKey="sk-ant-api03-..." \
+  --name initial-deploy
+
+# 3. Capture outputs
+ACR=$(az deployment group show -g rg-mri-pipeline-prod -n initial-deploy \
+      --query "properties.outputs.acrLoginServer.value" -o tsv | cut -d. -f1)
+FQDN=$(az deployment group show -g rg-mri-pipeline-prod -n initial-deploy \
+       --query "properties.outputs.containerAppFqdn.value" -o tsv)
+
+# 4. Build and push initial image
+az acr login --name "$ACR"
+docker build -f Dockerfile -t "${ACR}.azurecr.io/mri-pipeline:initial" .
+docker push "${ACR}.azurecr.io/mri-pipeline:initial"
+
+# 5. Point the Container App at the initial image
+az containerapp update \
+  --name ca-mri-pipeline-prod \
+  --resource-group rg-mri-pipeline-prod \
+  --image "${ACR}.azurecr.io/mri-pipeline:initial"
+
+echo "App live at: https://${FQDN}"
+```
+
+### CI/CD (GitLab)
+
+After the one-time provisioning, every push to `main` runs the two-stage GitLab CI/CD pipeline defined in `.gitlab-ci.yml`:
+
+1. **build** — builds the Docker image tagged with `$CI_COMMIT_SHORT_SHA`, pushes to ACR
+2. **deploy** — runs `az containerapp update --image ...` to activate the new revision, then smoke-checks `GET /api/v1/runs` for HTTP 200
+
+Required GitLab CI/CD Variables (masked): `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `RESOURCE_GROUP`, `CONTAINER_APP_NAME`, `CONTAINER_APP_FQDN`.
+
+### SSE and HITL in Production
+
+Azure Container Apps enforces an HTTP ingress timeout (default 240 s). During a HITL pause — where the browser SSE stream is held open waiting for operator approval — this timer would normally drop the connection.
+
+The mitigation is a **heartbeat event** emitted every 500 ms when no real pipeline events are pending (`routes/events.py`). This resets the proxy idle timer continuously. If the connection is dropped anyway (network blip, tab refresh), the browser `EventSource` API auto-reconnects and the `Last-Event-ID` replay mechanism resumes from where it left off. The pipeline thread inside the container is unaffected — it is blocked on `threading.Event.wait(timeout=3600)` and does not care about the HTTP layer.

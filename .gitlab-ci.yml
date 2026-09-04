@@ -1,0 +1,134 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Market Research Intelligence Pipeline — GitLab CI/CD
+#
+# Stages:
+#   build   → build Docker image, push to Azure Container Registry
+#   deploy  → update Container App to new image revision
+#
+# Triggers: pushes to main branch only.
+#
+# Required GitLab CI/CD Variables (Settings → CI/CD → Variables, all Masked):
+#   AZURE_CLIENT_ID         Service principal client ID
+#   AZURE_CLIENT_SECRET     Service principal client secret  (Masked + Protected)
+#   AZURE_TENANT_ID         Azure tenant ID
+#   AZURE_SUBSCRIPTION_ID   Azure subscription ID
+#   ACR_NAME                Registry name, e.g. acrmripipelineprod
+#   RESOURCE_GROUP          Resource group, e.g. rg-mri-pipeline-prod
+#   CONTAINER_APP_NAME      Container App name, e.g. ca-mri-pipeline-prod
+#   CONTAINER_APP_FQDN      App FQDN for the environment URL (no https://)
+# ─────────────────────────────────────────────────────────────────────────────
+
+stages:
+  - build
+  - deploy
+
+variables:
+  BUILD_CONTEXT:    "exercises/06-capstone-pipeline"
+  DOCKERFILE_PATH:  "exercises/06-capstone-pipeline/Dockerfile"
+  APP_REPO_NAME:    "mri-pipeline"
+
+# Only run on the main branch
+.only-main: &only-main
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ── Stage 1: Build & push Docker image ───────────────────────────────────────
+
+build-and-push:
+  stage: build
+  <<: *only-main
+  # Use a pre-built image that ships with both Docker CLI and Azure CLI to avoid
+  # slow installation steps inside the job. If your GitLab Runner is self-hosted
+  # on Azure with Docker + az already installed, replace with 'alpine:3.20'.
+  image: mcr.microsoft.com/azure-cli:latest
+  services:
+    - name: docker:24-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: "1"
+    DOCKER_CERT_PATH: "/certs/client"
+  before_script:
+    # Install Docker CLI into the Azure CLI image
+    - apk add --no-cache docker-cli
+    # Authenticate to Azure
+    - az login --service-principal
+        --username "$AZURE_CLIENT_ID"
+        --password "$AZURE_CLIENT_SECRET"
+        --tenant "$AZURE_TENANT_ID"
+        --output none
+    - az account set --subscription "$AZURE_SUBSCRIPTION_ID" --output none
+    # Log in to ACR via managed token (no admin credentials stored anywhere)
+    - az acr login --name "$ACR_NAME"
+  script:
+    - IMAGE_TAG="${CI_COMMIT_SHORT_SHA}"
+    - IMAGE_BASE="${ACR_NAME}.azurecr.io/${APP_REPO_NAME}"
+    # Use :latest as build cache so unchanged layers aren't rebuilt
+    - docker pull "${IMAGE_BASE}:latest" || true
+    - docker build
+        --file "${DOCKERFILE_PATH}"
+        --tag "${IMAGE_BASE}:${IMAGE_TAG}"
+        --tag "${IMAGE_BASE}:latest"
+        --cache-from "${IMAGE_BASE}:latest"
+        "${BUILD_CONTEXT}"
+    - docker push "${IMAGE_BASE}:${IMAGE_TAG}"
+    - docker push "${IMAGE_BASE}:latest"
+    # Pass IMAGE_TAG to the deploy stage
+    - echo "IMAGE_TAG=${IMAGE_TAG}" > build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+    expire_in: 1 hour
+
+# ── Stage 2: Deploy to Azure Container Apps ───────────────────────────────────
+
+deploy:
+  stage: deploy
+  <<: *only-main
+  image: mcr.microsoft.com/azure-cli:latest
+  needs:
+    - job: build-and-push
+      artifacts: true
+  before_script:
+    - az login --service-principal
+        --username "$AZURE_CLIENT_ID"
+        --password "$AZURE_CLIENT_SECRET"
+        --tenant "$AZURE_TENANT_ID"
+        --output none
+    - az account set --subscription "$AZURE_SUBSCRIPTION_ID" --output none
+  script:
+    - IMAGE_BASE="${ACR_NAME}.azurecr.io/${APP_REPO_NAME}"
+    # Update the Container App — creates a new revision, keeps minReplicas=1 warm
+    - az containerapp update
+        --name "$CONTAINER_APP_NAME"
+        --resource-group "$RESOURCE_GROUP"
+        --image "${IMAGE_BASE}:${IMAGE_TAG}"
+        --output table
+    # Wait for the new revision to become active
+    - |
+      echo "Waiting for revision to activate..."
+      for i in $(seq 1 12); do
+        HEALTH=$(az containerapp revision list \
+          --name "$CONTAINER_APP_NAME" \
+          --resource-group "$RESOURCE_GROUP" \
+          --query "[0].properties.healthState" -o tsv 2>/dev/null)
+        echo "  Attempt ${i}/12 — health: ${HEALTH}"
+        if [ "$HEALTH" = "Healthy" ]; then
+          echo "Revision is healthy."
+          break
+        fi
+        sleep 10
+      done
+    # Smoke-check the live app
+    - |
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+        "https://${CONTAINER_APP_FQDN}/api/v1/runs")
+      echo "GET /api/v1/runs → HTTP ${HTTP_CODE}"
+      if [ "$HTTP_CODE" != "200" ]; then
+        echo "Smoke check failed — deployment may be unhealthy"
+        exit 1
+      fi
+  environment:
+    name: production
+    url: "https://$CONTAINER_APP_FQDN"

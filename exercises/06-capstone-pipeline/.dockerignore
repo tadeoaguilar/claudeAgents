@@ -1,0 +1,34 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+
+# Virtual environments — never copy host venv into image
+.venv/
+venv/
+env/
+
+# Secrets — never embed in image
+.env
+.env.*
+
+# Runtime-generated files — live on mounted Azure Files volume at runtime
+pipeline_runs.jsonl
+report_*.md
+
+# Infrastructure as code — not needed at runtime
+infra/
+
+# Development artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
